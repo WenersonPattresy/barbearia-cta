@@ -35,7 +35,14 @@ const createTables = async () => {
   }
 };
 
-app.use(cors());
+// Substitua a linha 'app.use(cors());' por este bloco:
+
+const corsOptions = {
+  origin: 'https://sistema-agendamento-barbearia-xi.vercel.app',
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // --- Rotas da API (Adaptadas para PostgreSQL) ---

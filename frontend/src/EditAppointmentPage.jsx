@@ -18,7 +18,7 @@ function EditAppointmentPage() {
   useEffect(() => {
     const fetchAppointmentData = async () => {
       try {
-        const response = await fetch(`http://localhost:3001/api/appointments/${id}`);
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments`);
         const result = await response.json();
         if (result.success) {
           const { name, service, date, time } = result.data;

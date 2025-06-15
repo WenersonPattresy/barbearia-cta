@@ -16,7 +16,7 @@ function AppointmentForm() {
       setTime(''); 
       const fetchBookedTimes = async () => {
         try {
-          const response = await fetch(`http://localhost:3001/api/booked-times/${date}`);
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments`);
           const result = await response.json();
           if (result.success) {
             setBookedTimes(result.data);

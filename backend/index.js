@@ -1,10 +1,14 @@
+// backend/index.js (Versão Completa e Final)
+
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 require('dotenv').config();
+const bcrypt = require('bcrypt');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
+const saltRounds = 10;
 
 // Configuração da conexão com o PostgreSQL
 const pool = new Pool({
@@ -24,33 +28,59 @@ const createTables = async () => {
       date VARCHAR(255) NOT NULL,
       time VARCHAR(255) NOT NULL
     );`;
+  const usersTable = `
+    CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL
+    );`;
   try {
     await pool.query(appointmentsTable);
-    console.log("Tabela 'appointments' verificada/criada com sucesso.");
+    await pool.query(usersTable);
+    console.log("Tabelas verificadas/criadas com sucesso.");
   } catch (err) {
-    console.error("Erro ao criar tabela", err);
+    console.error("Erro ao criar tabelas:", err);
   }
 };
 
-// Lista de origens permitidas (incluindo o novo domínio do Vercel)
+// Configuração de CORS para produção
 const allowedOrigins = [
   'https://sistema-agendamento-barbearia-xi.vercel.app',
-  'https://sistema-agendamento-barbearia-git-main-wenersons-projects.vercel.app',
-  'https://barbearia-cta-xi.vercel.app' 
+  'https://barbearia-cta-xi.vercel.app',
+  'https://barbearia-cta.vercel.app' 
 ];
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error('A política de CORS não permite acesso desta Origem.'));
     }
   }
 };
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// --- Rotas da API ---
+// --- Rotas de Autenticação ---
+
+app.post('/api/register', async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ success: false, message: "Nome de usuário e senha são obrigatórios." });
+
+    try {
+        const passwordHash = await bcrypt.hash(password, saltRounds);
+        const sql = `INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id`;
+        const result = await pool.query(sql, [username, passwordHash]);
+        res.status(201).json({ success: true, message: "Usuário registrado com sucesso!", userId: result.rows[0].id });
+    } catch (err) {
+        if (err.code === '23505') { // Código de erro do PostgreSQL para violação de chave única
+            return res.status(409).json({ success: false, message: "Este nome de usuário já existe." });
+        }
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// --- Rotas da API de Agendamentos ---
 
 // GET /api/appointments (Listar todos)
 app.get('/api/appointments', async (req, res) => {
@@ -67,9 +97,7 @@ app.get('/api/booked-times/:date', async (req, res) => {
         const { rows } = await pool.query("SELECT time FROM appointments WHERE date = $1", [date]);
         const bookedTimes = rows.map(row => row.time);
         res.json({ success: true, data: bookedTimes });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
+    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
 // GET /api/appointments/:id (Buscar um)
@@ -103,7 +131,8 @@ app.put('/api/appointments/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { name, service, date, time } = req.body;
-        await pool.query("UPDATE appointments SET name = $1, service = $2, date = $3, time = $4 WHERE id = $5", [name, service, date, time, id]);
+        const result = await pool.query("UPDATE appointments SET name = $1, service = $2, date = $3, time = $4 WHERE id = $5", [name, service, date, time, id]);
+        if (result.rowCount === 0) return res.status(404).json({ success: false, message: "Agendamento não encontrado para atualizar." });
         res.json({ success: true, message: "Agendamento atualizado com sucesso!" });
     } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -120,6 +149,7 @@ app.delete('/api/appointments/:id', async (req, res) => {
         }
     } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
+
 
 app.listen(PORT, () => {
   console.log(`🎉 Servidor backend rodando na porta ${PORT}`);

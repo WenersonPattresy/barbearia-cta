@@ -2,13 +2,13 @@
 
 const express = require('express');
 const cors = require('cors');
-const { Pool } = require('pg'); // Importa o driver 'pg'
-require('dotenv').config(); // Carrega as variáveis de ambiente
+const { Pool } = require('pg');
+require('dotenv').config();
 
 const app = express();
 const PORT = 3001;
 
-// Configuração da conexão com o PostgreSQL usando a URL do Render
+// Configuração da conexão com o PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -16,7 +16,7 @@ const pool = new Pool({
   }
 });
 
-// Função para criar as tabelas se não existirem
+// Função para criar as tabelas
 const createTables = async () => {
   const appointmentsTable = `
     CREATE TABLE IF NOT EXISTS appointments (
@@ -26,7 +26,6 @@ const createTables = async () => {
       date VARCHAR(255) NOT NULL,
       time VARCHAR(255) NOT NULL
     );`;
-  // ... (aqui poderíamos adicionar a tabela de usuários também)
   try {
     await pool.query(appointmentsTable);
     console.log("Tabela 'appointments' verificada/criada com sucesso.");
@@ -35,19 +34,27 @@ const createTables = async () => {
   }
 };
 
-// Substitua a linha 'app.use(cors());' por este bloco:
+const allowedOrigins = [
+  'https://sistema-agendamento-barbearia-xi.vercel.app',
+  'https://sistema-agendamento-barbearia-git-main-wenersons-projects.vercel.app'
+];
 
 const corsOptions = {
-  origin: 'https://sistema-agendamento-barbearia-xi.vercel.app',
-  optionsSuccessStatus: 200
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  }
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// --- Rotas da API (Adaptadas para PostgreSQL) ---
-// Note que os comandos SQL são quase idênticos! Apenas os placeholders mudam de '?' para '$1, $2, etc.'
+// --- ROTAS DA API ---
 
+// 1. GET /api/appointments (Listar todos)
 app.get('/api/appointments', async (req, res) => {
     try {
         const sql = "SELECT * FROM appointments ORDER BY date, time";
@@ -58,29 +65,69 @@ app.get('/api/appointments', async (req, res) => {
     }
 });
 
+// 2. GET /api/appointments/:id (Buscar um)
+app.get('/api/appointments/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const sql = "SELECT * FROM appointments WHERE id = $1";
+        const { rows } = await pool.query(sql, [id]);
+        if (rows.length > 0) {
+            res.json({ success: true, data: rows[0] });
+        } else {
+            res.status(404).json({ success: false, message: "Agendamento não encontrado." });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// 3. POST /api/schedule (Criar)
 app.post('/api/schedule', async (req, res) => {
     const { name, service, date, time } = req.body;
     try {
         const checkSql = `SELECT id FROM appointments WHERE date = $1 AND time = $2`;
         const { rows } = await pool.query(checkSql, [date, time]);
-
         if (rows.length > 0) {
             return res.status(409).json({ success: false, message: "Este horário já está ocupado." });
         }
-
         const insertSql = `INSERT INTO appointments (name, service, date, time) VALUES ($1, $2, $3, $4) RETURNING id`;
         const result = await pool.query(insertSql, [name, service, date, time]);
-
-        console.log(`🎉 Novo agendamento salvo com ID: ${result.rows[0].id}`);
         res.status(201).json({ success: true, message: 'Agendamento salvo!', appointmentId: result.rows[0].id });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
 });
 
-// ... (outras rotas seriam adaptadas de forma similar)
+// 4. PUT /api/appointments/:id (Atualizar/Editar)
+app.put('/api/appointments/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, service, date, time } = req.body;
+        const sql = `UPDATE appointments SET name = $1, service = $2, date = $3, time = $4 WHERE id = $5`;
+        await pool.query(sql, [name, service, date, time, id]);
+        res.json({ success: true, message: "Agendamento atualizado com sucesso!" });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// 5. DELETE /api/appointments/:id (Excluir)
+app.delete('/api/appointments/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const sql = 'DELETE FROM appointments WHERE id = $1';
+        const result = await pool.query(sql, [id]);
+        if (result.rowCount > 0) {
+            res.json({ success: true, message: "Agendamento excluído com sucesso!" });
+        } else {
+            res.status(404).json({ success: false, message: "Agendamento não encontrado." });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 
 app.listen(PORT, () => {
   console.log(`🎉 Servidor backend rodando na porta ${PORT}`);
-  createTables(); // Chama a função para criar as tabelas ao iniciar
+  createTables();
 });

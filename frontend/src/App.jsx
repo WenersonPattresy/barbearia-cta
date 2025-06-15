@@ -1,32 +1,29 @@
-// frontend/src/App.jsx
-
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import AppointmentForm from './AppointmentForm';
 import AdminPage from './AdminPage';
 import LoginPage from './LoginPage';
 import ProtectedRoute from './ProtectedRoute';
-import EditAppointmentPage from './EditAppointmentPage'; // Importamos a página de edição
-import './index.css'; // Importa os estilos do Tailwind
+import EditAppointmentPage from './EditAppointmentPage';
+import './index.css';
 
 function App() {
   const navigate = useNavigate();
   const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
 
   const handleLogout = () => {
-    localStorage.removeItem('isLoggedIn'); // Remove a marcação de login
-    navigate('/login'); // Redireciona para a página de login
+    localStorage.removeItem('isLoggedIn');
+    navigate('/login');
   };
 
   return (
     <div>
-      <nav className="main-nav bg-gray-800 text-white p-4 flex justify-between items-center">
+      <nav className="bg-gray-800 text-white p-4 flex justify-between items-center shadow-lg">
         <div>
-          <Link to="/" className="p-2 hover:bg-gray-700 rounded">Agendamento</Link>
-          <Link to="/admin" className="p-2 hover:bg-gray-700 rounded">Painel do Admin</Link>
+          <Link to="/" className="p-2 hover:bg-gray-700 rounded-md text-lg font-semibold">Agendamento</Link>
+          <Link to="/admin" className="p-2 ml-4 hover:bg-gray-700 rounded-md text-lg font-semibold">Painel do Admin</Link>
         </div>
-        {/* Mostra o botão de Logout apenas se o usuário estiver logado */}
         {isLoggedIn && (
-          <button onClick={handleLogout} className="p-2 bg-red-600 hover:bg-red-700 rounded">
+          <button onClick={handleLogout} className="p-2 bg-red-600 hover:bg-red-700 rounded-md text-white font-bold">
             Sair (Logout)
           </button>
         )}
@@ -56,5 +53,4 @@ function App() {
   );
 }
 
-// ESTA É A LINHA CRUCIAL QUE PROVAVELMENTE ESTÁ FALTANDO
 export default App;

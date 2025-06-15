@@ -1,5 +1,3 @@
-// backend/index.js
-
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -8,6 +6,7 @@ require('dotenv').config();
 const app = express();
 const PORT = 3001;
 
+// Configuração da conexão com o PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -15,6 +14,7 @@ const pool = new Pool({
   }
 });
 
+// Função para criar as tabelas se não existirem
 const createTables = async () => {
   const appointmentsTable = `
     CREATE TABLE IF NOT EXISTS appointments (
@@ -32,9 +32,11 @@ const createTables = async () => {
   }
 };
 
+// Lista de origens permitidas (incluindo o novo domínio do Vercel)
 const allowedOrigins = [
   'https://sistema-agendamento-barbearia-xi.vercel.app',
-  'https://sistema-agendamento-barbearia-git-main-wenersons-projects.vercel.app'
+  'https://sistema-agendamento-barbearia-git-main-wenersons-projects.vercel.app',
+  'https://barbearia-cta-xi.vercel.app' 
 ];
 const corsOptions = {
   origin: function (origin, callback) {
@@ -56,6 +58,18 @@ app.get('/api/appointments', async (req, res) => {
         const { rows } = await pool.query("SELECT * FROM appointments ORDER BY date, time");
         res.json({ success: true, data: rows });
     } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// GET /api/booked-times/:date (Buscar horários ocupados por data)
+app.get('/api/booked-times/:date', async (req, res) => {
+    const { date } = req.params;
+    try {
+        const { rows } = await pool.query("SELECT time FROM appointments WHERE date = $1", [date]);
+        const bookedTimes = rows.map(row => row.time);
+        res.json({ success: true, data: bookedTimes });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 // GET /api/appointments/:id (Buscar um)

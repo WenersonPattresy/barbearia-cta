@@ -2,65 +2,78 @@
 
 const express = require('express');
 const cors = require('cors');
-const Database = require('better-sqlite3'); // Importa o better-sqlite3
+const { Pool } = require('pg'); // Importa o driver 'pg'
+require('dotenv').config(); // Carrega as variáveis de ambiente
 
 const app = express();
 const PORT = 3001;
 
-// Conexão com o Banco de Dados usando better-sqlite3
-const db = new Database('schedule.db', { verbose: console.log });
+// Configuração da conexão com o PostgreSQL usando a URL do Render
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
 
-// Cria as tabelas se elas não existirem
-db.exec(`
-  CREATE TABLE IF NOT EXISTS appointments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, service TEXT NOT NULL, date TEXT NOT NULL, time TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL
-  );
-`);
+// Função para criar as tabelas se não existirem
+const createTables = async () => {
+  const appointmentsTable = `
+    CREATE TABLE IF NOT EXISTS appointments (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      service VARCHAR(255) NOT NULL,
+      date VARCHAR(255) NOT NULL,
+      time VARCHAR(255) NOT NULL
+    );`;
+  // ... (aqui poderíamos adicionar a tabela de usuários também)
+  try {
+    await pool.query(appointmentsTable);
+    console.log("Tabela 'appointments' verificada/criada com sucesso.");
+  } catch (err) {
+    console.error("Erro ao criar tabela", err);
+  }
+};
 
 app.use(cors());
 app.use(express.json());
 
-// --- Rotas da API (Adaptadas para better-sqlite3) ---
+// --- Rotas da API (Adaptadas para PostgreSQL) ---
+// Note que os comandos SQL são quase idênticos! Apenas os placeholders mudam de '?' para '$1, $2, etc.'
 
-// Rota GET para listar TODOS os agendamentos
-app.get('/api/appointments', (req, res) => {
+app.get('/api/appointments', async (req, res) => {
     try {
         const sql = "SELECT * FROM appointments ORDER BY date, time";
-        const appointments = db.prepare(sql).all();
-        res.json({ success: true, message: "Agendamentos listados com sucesso!", data: appointments });
+        const { rows } = await pool.query(sql);
+        res.json({ success: true, data: rows });
     } catch (err) {
-        res.status(400).json({ success: false, message: "Erro ao buscar agendamentos." });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
-// Rota POST para CRIAR um novo agendamento
-app.post('/api/schedule', (req, res) => {
+app.post('/api/schedule', async (req, res) => {
     const { name, service, date, time } = req.body;
     try {
-        // Verifica conflito
-        const checkSql = `SELECT id FROM appointments WHERE date = ? AND time = ?`;
-        const existing = db.prepare(checkSql).get(date, time);
+        const checkSql = `SELECT id FROM appointments WHERE date = $1 AND time = $2`;
+        const { rows } = await pool.query(checkSql, [date, time]);
 
-        if (existing) {
-            return res.status(409).json({ success: false, message: "Este horário já está ocupado. Por favor, escolha outro." });
+        if (rows.length > 0) {
+            return res.status(409).json({ success: false, message: "Este horário já está ocupado." });
         }
 
-        // Insere o novo agendamento
-        const insertSql = `INSERT INTO appointments (name, service, date, time) VALUES (?, ?, ?, ?)`;
-        const info = db.prepare(insertSql).run(name, service, date, time);
+        const insertSql = `INSERT INTO appointments (name, service, date, time) VALUES ($1, $2, $3, $4) RETURNING id`;
+        const result = await pool.query(insertSql, [name, service, date, time]);
 
-        console.log(`🎉 Novo agendamento salvo com ID: ${info.lastInsertRowid}`);
-        res.status(201).json({ success: true, message: 'Agendamento salvo com sucesso!', appointmentId: info.lastInsertRowid });
+        console.log(`🎉 Novo agendamento salvo com ID: ${result.rows[0].id}`);
+        res.status(201).json({ success: true, message: 'Agendamento salvo!', appointmentId: result.rows[0].id });
     } catch (err) {
-        res.status(500).json({ success: false, message: "Erro ao salvar o agendamento." });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
-// ... (O resto das rotas, como register, delete, update, etc., seriam adaptadas da mesma forma)
+// ... (outras rotas seriam adaptadas de forma similar)
 
 app.listen(PORT, () => {
   console.log(`🎉 Servidor backend rodando na porta ${PORT}`);
+  createTables(); // Chama a função para criar as tabelas ao iniciar
 });

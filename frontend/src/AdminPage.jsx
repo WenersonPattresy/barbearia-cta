@@ -1,8 +1,5 @@
-// frontend/src/AdminPage.jsx
-
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom'; // Precisamos do Link para o botão de Editar
-import './index.css'; // Usamos o index.css para o Tailwind
+import { Link } from 'react-router-dom';
 
 function AdminPage() {
   const [appointments, setAppointments] = useState([]);
@@ -28,7 +25,7 @@ function AdminPage() {
       return;
     }
     try {
-      const response = await fetch(`http://localhost:3001/api/appointments/${appointmentId}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/appointments/${appointmentId}`, {
         method: 'DELETE',
       });
       const result = await response.json();
@@ -45,7 +42,7 @@ function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center p-4 font-sans">
+    <div className="min-h-screen p-8 font-sans">
       <header className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Painel do Administrador</h1>
         <p className="text-gray-600 mt-2">Lista de todos os agendamentos marcados.</p>
@@ -57,10 +54,10 @@ function AdminPage() {
               appointments.map((app) => (
                 <li key={app.id} className="flex justify-between items-center p-4 border rounded-lg hover:bg-gray-50">
                   <span className="text-gray-800">
-                    <strong>{app.date} às {app.time}</strong> - {app.name} ({app.service})
+                    <strong>{new Date(app.date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})} às {app.time}</strong> - {app.name} ({app.service})
                   </span>
                   <div className="flex space-x-2">
-                    <Link to={`/admin/edit/${app.id}`} className="px-3 py-1 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded">Editar</Link>
+                    <Link to={`/admin/edit/${app.id}`} className="px-3 py-1 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded no-underline">Editar</Link>
                     <button onClick={() => handleDelete(app.id)} className="px-3 py-1 text-sm text-white bg-red-600 hover:bg-red-700 rounded">Excluir</button>
                   </div>
                 </li>
@@ -75,5 +72,4 @@ function AdminPage() {
   );
 }
 
-// ESTA É A LINHA CRUCIAL QUE PROVAVELMENTE ESTÁ FALTANDO
 export default AdminPage;

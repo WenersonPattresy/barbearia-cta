@@ -1,13 +1,32 @@
+// frontend/src/AppointmentForm.jsx
+
 import { useState, useEffect, useCallback } from 'react';
 
 function AppointmentForm() {
   const [name, setName] = useState('');
-  const [service, setService] = useState('');
+  const [serviceId, setServiceId] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
-  const [bookedTimes, setBookedTimes] = useState([]);
 
+  const [services, setServices] = useState([]);
+  const [bookedTimes, setBookedTimes] = useState([]);
+  
   const availableTimeSlots = [ '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00' ];
+
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/services`);
+        const result = await response.json();
+        if (result.success) {
+          setServices(result.data);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar serviços:", error);
+      }
+    };
+    fetchServices();
+  }, []);
 
   const fetchBookedTimes = useCallback(async (selectedDate) => {
     if (!selectedDate) return;
@@ -29,7 +48,7 @@ function AppointmentForm() {
 
   const handleScheduleSubmit = async (event) => {
     event.preventDefault();
-    const appointmentData = { name, service, date, time };
+    const appointmentData = { customer_name: name, service_id: serviceId, date, time };
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/schedule`, {
         method: 'POST',
@@ -39,7 +58,7 @@ function AppointmentForm() {
       const result = await response.json();
       if (response.ok) {
         alert(`Agendamento confirmado!`);
-        setName(''); setService(''); setDate(''); setTime('');
+        setName(''); setServiceId(''); setDate(''); setTime('');
         fetchBookedTimes(date);
       } else {
         alert(`Erro: ${result.message}`);
@@ -63,15 +82,19 @@ function AppointmentForm() {
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Seu Nome:</label>
               <input type="text" id="name" className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
+            
             <div>
               <label htmlFor="service" className="block text-sm font-medium text-gray-700 mb-1">Serviço Desejado:</label>
-              <select id="service" className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={service} onChange={(e) => setService(e.target.value)} required>
+              <select id="service" className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={serviceId} onChange={(e) => setServiceId(e.target.value)} required >
                 <option value="">Selecione um serviço</option>
-                <option value="corte-cabelo">Corte de Cabelo</option>
-                <option value="barba">Barba</option>
-                <option value="corte-barba">Corte + Barba</option>
+                {services.map(service => (
+                  <option key={service.id} value={service.id}>
+                    {service.name} - R$ {Number(service.price).toFixed(2)}
+                  </option>
+                ))}
               </select>
             </div>
+
             <div>
               <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">Data:</label>
               <input type="date" id="date" className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" value={date} onChange={(e) => setDate(e.target.value)} required />
@@ -87,6 +110,7 @@ function AppointmentForm() {
                 ))}
               </select>
             </div>
+            
             <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
               Agendar Agora
             </button>

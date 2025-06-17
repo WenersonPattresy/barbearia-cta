@@ -1,4 +1,4 @@
-// backend/index.js (Versão Definitiva com Estrutura Financeira)
+// backend/index.js (Versão Final e Completa)
 
 const express = require('express');
 const cors = require('cors');
@@ -25,11 +25,10 @@ const setupDatabase = async () => {
       price NUMERIC(10, 2) NOT NULL 
     );`;
 
-  // Definição CORRETA da tabela de agendamentos
   const createAppointmentsTable = `
     CREATE TABLE IF NOT EXISTS appointments (
       id SERIAL PRIMARY KEY,
-      customer_name VARCHAR(255) NOT NULL, -- Usando o nome correto da coluna
+      customer_name VARCHAR(255) NOT NULL,
       service_id INTEGER REFERENCES services(id), 
       price_at_time_of_booking NUMERIC(10, 2) NOT NULL,
       "date" VARCHAR(255) NOT NULL,
@@ -43,7 +42,7 @@ const setupDatabase = async () => {
 
     const { rows } = await pool.query("SELECT COUNT(*) as count FROM services");
     if (rows[0].count === '0') {
-      console.log("A popular a tabela de serviços com dados padrão...");
+      console.log("Populando a tabela de serviços com dados padrão...");
       await pool.query(`
         INSERT INTO services (name, price) VALUES
           ('Corte de Cabelo', 35.00),
@@ -53,7 +52,7 @@ const setupDatabase = async () => {
       console.log("Serviços padrão inseridos com sucesso.");
     }
   } catch (err) {
-    console.error("Erro ao configurar a base de dados:", err);
+    console.error("Erro ao configurar o banco de dados:", err);
   }
 };
 
@@ -70,57 +69,74 @@ const corsOptions = {
     } else {
       callback(new Error('A política de CORS não permite acesso desta Origem.'));
     }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  }
 };
+
+// Aplica as opções de CORS a todas as rotas
 app.use(cors(corsOptions));
+// Lida explicitamente com as requisições de preflight (verificação)
 app.options('*', cors(corsOptions));
+
 app.use(express.json());
 
 // --- ROTAS DA API ---
 
-// GET /api/services (Listar serviços)
+// GET /api/services (Para buscar a lista de serviços)
 app.get('/api/services', async (req, res) => {
     try {
         const { rows } = await pool.query("SELECT * FROM services ORDER BY price");
         res.json({ success: true, data: rows });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
-// GET /api/booked-times/:date (Buscar horários ocupados)
+// GET /api/booked-times/:date (Para buscar horários ocupados)
 app.get('/api/booked-times/:date', async (req, res) => {
     const { date } = req.params;
     try {
         const { rows } = await pool.query("SELECT time FROM appointments WHERE date = $1", [date]);
         const bookedTimes = rows.map(row => row.time);
         res.json({ success: true, data: bookedTimes });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
-// GET /api/appointments (Listar todos os agendamentos)
+// GET /api/appointments (Para listar todos os agendamentos no painel de admin)
 app.get('/api/appointments', async (req, res) => {
     try {
         const sql = `
             SELECT 
-                a.id, a.customer_name, s.name as service_name, a.price_at_time_of_booking, a.date, a.time 
-            FROM appointments a JOIN services s ON a.service_id = s.id ORDER BY a.date, a.time;
+                a.id, 
+                a.customer_name, 
+                s.name as service_name, 
+                a.price_at_time_of_booking,
+                a.date, 
+                a.time 
+            FROM appointments a
+            JOIN services s ON a.service_id = s.id
+            ORDER BY a.date, a.time;
         `;
         const { rows } = await pool.query(sql);
         res.json({ success: true, data: rows });
-    } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
-// POST /api/schedule (Criar agendamento)
+// POST /api/schedule (Para criar um novo agendamento)
 app.post('/api/schedule', async (req, res) => {
-    const { customer_name, service_id, date, time } = req.body; // Usando customer_name
+    const { customer_name, service_id, date, time } = req.body;
     try {
         const check = await pool.query("SELECT id FROM appointments WHERE date = $1 AND \"time\" = $2", [date, time]);
-        if (check.rows.length > 0) return res.status(409).json({ success: false, message: "Este horário já está ocupado." });
-        
+        if (check.rows.length > 0) {
+            return res.status(409).json({ success: false, message: "Este horário já está ocupado." });
+        }
         const serviceResult = await pool.query("SELECT price FROM services WHERE id = $1", [service_id]);
-        if (serviceResult.rows.length === 0) return res.status(404).json({ success: false, message: "Serviço não encontrado." });
-        
+        if (serviceResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Serviço não encontrado." });
+        }
         const price_at_time_of_booking = serviceResult.rows[0].price;
         const insertSql = `
             INSERT INTO appointments (customer_name, service_id, price_at_time_of_booking, "date", "time") 
@@ -129,13 +145,27 @@ app.post('/api/schedule', async (req, res) => {
         const result = await pool.query(insertSql, [customer_name, service_id, price_at_time_of_booking, date, time]);
         res.status(201).json({ success: true, message: 'Agendamento salvo!', appointmentId: result.rows[0].id });
     } catch (err) {
-        console.error("Erro ao agendar:", err.message);
         res.status(500).json({ success: false, message: err.message });
     }
 });
 
-// Inicia o servidor
+// DELETE /api/appointments/:id (Para deletar um agendamento)
+app.delete('/api/appointments/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
+        if (result.rowCount > 0) {
+            res.json({ success: true, message: "Agendamento excluído com sucesso!" });
+        } else {
+            res.status(404).json({ success: false, message: "Agendamento não encontrado." });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// Inicia o servidor e chama a função de setup do banco de dados
 app.listen(PORT, () => {
-  console.log(`🎉 Servidor backend a rodar na porta ${PORT}`);
+  console.log(`🎉 Servidor backend rodando na porta ${PORT}`);
   setupDatabase();
 });

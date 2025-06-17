@@ -71,17 +71,12 @@ const corsOptions = {
     }
   }
 };
-
-// Aplica as opções de CORS a todas as rotas
 app.use(cors(corsOptions));
-// Lida explicitamente com as requisições de preflight (verificação)
-app.options('*', cors(corsOptions));
-
 app.use(express.json());
 
 // --- ROTAS DA API ---
 
-// GET /api/services (Para buscar a lista de serviços)
+// Rota para buscar a lista de serviços e preços
 app.get('/api/services', async (req, res) => {
     try {
         const { rows } = await pool.query("SELECT * FROM services ORDER BY price");
@@ -91,7 +86,7 @@ app.get('/api/services', async (req, res) => {
     }
 });
 
-// GET /api/booked-times/:date (Para buscar horários ocupados)
+// Rota para buscar horários ocupados
 app.get('/api/booked-times/:date', async (req, res) => {
     const { date } = req.params;
     try {
@@ -103,29 +98,7 @@ app.get('/api/booked-times/:date', async (req, res) => {
     }
 });
 
-// GET /api/appointments (Para listar todos os agendamentos no painel de admin)
-app.get('/api/appointments', async (req, res) => {
-    try {
-        const sql = `
-            SELECT 
-                a.id, 
-                a.customer_name, 
-                s.name as service_name, 
-                a.price_at_time_of_booking,
-                a.date, 
-                a.time 
-            FROM appointments a
-            JOIN services s ON a.service_id = s.id
-            ORDER BY a.date, a.time;
-        `;
-        const { rows } = await pool.query(sql);
-        res.json({ success: true, data: rows });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-});
-
-// POST /api/schedule (Para criar um novo agendamento)
+// Rota para criar um novo agendamento
 app.post('/api/schedule', async (req, res) => {
     const { customer_name, service_id, date, time } = req.body;
     try {
@@ -149,20 +122,7 @@ app.post('/api/schedule', async (req, res) => {
     }
 });
 
-// DELETE /api/appointments/:id (Para deletar um agendamento)
-app.delete('/api/appointments/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const result = await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
-        if (result.rowCount > 0) {
-            res.json({ success: true, message: "Agendamento excluído com sucesso!" });
-        } else {
-            res.status(404).json({ success: false, message: "Agendamento não encontrado." });
-        }
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-});
+// (Aqui entrariam as outras rotas de admin: listar, editar, deletar)
 
 // Inicia o servidor e chama a função de setup do banco de dados
 app.listen(PORT, () => {

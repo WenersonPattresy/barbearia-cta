@@ -1,4 +1,4 @@
-// backend/index.js (Versão Final e Completa)
+// backend/index.js (Versão Definitiva com Estrutura Financeira)
 
 const express = require('express');
 const cors = require('cors');
@@ -25,10 +25,11 @@ const setupDatabase = async () => {
       price NUMERIC(10, 2) NOT NULL 
     );`;
 
+  // Definição CORRETA da tabela de agendamentos
   const createAppointmentsTable = `
     CREATE TABLE IF NOT EXISTS appointments (
       id SERIAL PRIMARY KEY,
-      customer_name VARCHAR(255) NOT NULL,
+      customer_name VARCHAR(255) NOT NULL, -- Usando o nome correto da coluna
       service_id INTEGER REFERENCES services(id), 
       price_at_time_of_booking NUMERIC(10, 2) NOT NULL,
       "date" VARCHAR(255) NOT NULL,
@@ -58,14 +59,12 @@ const setupDatabase = async () => {
 
 // Configuração de CORS para produção
 const allowedOrigins = [
-  'https://sistema-agendamento-barbearia-xi.vercel.app', // Domínio antigo
-  'https://barbearia-cta-xi.vercel.app', // Novo domínio
-  'https://barbearia-cta.vercel.app'      // Outra variação possível do novo domínio
+  'https://sistema-agendamento-barbearia-xi.vercel.app',
+  'https://barbearia-cta-xi.vercel.app',
+  'https://barbearia-cta.vercel.app'
 ];
 const corsOptions = {
   origin: function (origin, callback) {
-    // Permite requisições sem 'origin' (como de apps mobile ou ferramentas de teste)
-    // ou se a origem estiver na lista de permitidos.
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -73,8 +72,6 @@ const corsOptions = {
     }
   }
 };
-
-// Aplica as opções de CORS a todas as rotas
 app.use(cors(corsOptions));
 app.use(express.json());
 
@@ -90,21 +87,9 @@ app.get('/api/services', async (req, res) => {
     }
 });
 
-// Rota para buscar horários ocupados de uma data específica
-app.get('/api/booked-times/:date', async (req, res) => {
-    const { date } = req.params;
-    try {
-        const { rows } = await pool.query("SELECT time FROM appointments WHERE date = $1", [date]);
-        const bookedTimes = rows.map(row => row.time);
-        res.json({ success: true, data: bookedTimes });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-});
-
 // Rota para criar um novo agendamento
 app.post('/api/schedule', async (req, res) => {
-    const { customer_name, service_id, date, time } = req.body;
+    const { customer_name, service_id, date, time } = req.body; // Usando customer_name
     try {
         const check = await pool.query("SELECT id FROM appointments WHERE date = $1 AND \"time\" = $2", [date, time]);
         if (check.rows.length > 0) {
@@ -122,12 +107,37 @@ app.post('/api/schedule', async (req, res) => {
         const result = await pool.query(insertSql, [customer_name, service_id, price_at_time_of_booking, date, time]);
         res.status(201).json({ success: true, message: 'Agendamento salvo!', appointmentId: result.rows[0].id });
     } catch (err) {
+        console.error("Erro ao agendar:", err.message);
         res.status(500).json({ success: false, message: err.message });
     }
 });
+
+// Rota para listar todos os agendamentos (para o admin)
+app.get('/api/appointments', async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                a.id, 
+                a.customer_name, 
+                s.name as service_name, 
+                a.price_at_time_of_booking,
+                a.date, 
+                a.time 
+            FROM appointments a
+            JOIN services s ON a.service_id = s.id
+            ORDER BY a.date, a.time;
+        `;
+        const { rows } = await pool.query(sql);
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 
 // Inicia o servidor e chama a função de setup do banco de dados
 app.listen(PORT, () => {
   console.log(`🎉 Servidor backend rodando na porta ${PORT}`);
   setupDatabase();
 });
+
